@@ -866,6 +866,62 @@ class SSKernelDiag(OptimModule):
         next_state = AL * state + v
         return next_state
 
+
+class MultiHeadEMA(OptimModule):
+    """Exponential Moving Average Layer.
+    See "" for more details.
+    """
+
+    def __init__(self, C, H, N, lr=None):
+        super().__init__()
+        self.C = C
+        self.H = H
+        self.N = N
+        # self.scale = math.sqrt(1.0 / self.N)
+
+        if lr is None or isinstance(lr, float):
+            lr_dict = {}
+        else:
+            lr_dict, lr = lr, None
+
+        alpha, delta, beta, gamma = self.reset_parameters()
+        self.register("alpha", alpha, lr_dict.get('A', lr))
+        self.register("delta", delta, lr_dict.get('A', lr))
+        self.register("beta", beta, lr_dict.get('B', lr))
+        self.gamma = nn.Parameter(gamma)
+
+    def reset_parameters(self):
+        # delta & alpha
+        alpha = torch.Tensor(self.C, self.H, self.N, 1).normal_(mean=0.0, std=0.2)
+        delta = torch.Tensor(self.C, self.H, self.N, 1).normal_(mean=0.0, std=0.2)
+        # beta [1, -1, 1, -1, ...] seems more stable.
+        val = torch.ones(self.N, 1)
+        if self.ndim > 1:
+            idx = torch.tensor(list(range(1, self.ndim, 2)))
+            val.index_fill_(0, idx, -1.0)
+        beta = torch.Tensor(self.C, self.H, self.N, 1).normal_(mean=0.0, std=0.02).add_(val)
+        # gamma
+        gamma = torch.Tensor(self.C, self.H, self.N).normal_()
+
+        return alpha, delta, beta, gamma
+
+    def _calc_coeffs(self):
+        # C x H x N x 1
+        p = torch.sigmoid(self.alpha)
+        delta = torch.sigmoid(self.delta)
+        q = 1.0 - p * delta
+        return p, q
+
+    def forward(self, L):
+        # C x H x N x 1
+        p, q = self._calc_coeffs()
+        # C x H x N x L
+        vander = torch.arange(L).to(p).view(1, 1, 1, L) * torch.log(q)
+        kernel = (p * self.beta) * torch.exp(vander)
+        # C x H x L
+        return torch.einsum('chnl,chn->chl', kernel, self.gamma)
+
+
 class SSKernel(nn.Module):
     """Wrapper around SSKernel parameterizations.
 
@@ -943,6 +999,8 @@ class SSKernel(nn.Module):
                 A, B, C, log_dt, L=L,
                 lr=lr,
             )
+        elif mode == 'ema':
+            self.kernel = MultiHeadEMA(channels, H, N, lr=lr)
         else:
             w, P, B, V = dplr.combination(measure, self.N, rank, self.n_ssm, **measure_args)
 
