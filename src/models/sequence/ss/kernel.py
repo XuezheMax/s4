@@ -912,14 +912,14 @@ class MultiHeadEMA(OptimModule):
         q = 1.0 - p * delta
         return p, q
 
-    def forward(self, L):
+    def forward(self, L, state=None, rate=1.0):
         # C x H x N x 1
         p, q = self._calc_coeffs()
         # C x H x N x L
         vander = torch.arange(L).to(p).view(1, 1, 1, L) * torch.log(q)
         kernel = (p * self.beta) * torch.exp(vander)
         # C x H x L
-        return torch.einsum('chnl,chn->chl', kernel, self.gamma)
+        return torch.einsum('chnl,chn->chl', kernel, self.gamma), None
 
 
 class SSKernel(nn.Module):
