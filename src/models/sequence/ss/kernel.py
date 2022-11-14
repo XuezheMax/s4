@@ -896,8 +896,8 @@ class MultiHeadEMA(OptimModule):
         delta = torch.Tensor(self.C, self.H, self.N, 1).normal_(mean=0.0, std=0.2)
         # beta [1, -1, 1, -1, ...] seems more stable.
         val = torch.ones(self.N, 1)
-        if self.ndim > 1:
-            idx = torch.tensor(list(range(1, self.ndim, 2)))
+        if self.N > 1:
+            idx = torch.tensor(list(range(1, self.N, 2)))
             val.index_fill_(0, idx, -1.0)
         beta = torch.Tensor(self.C, self.H, self.N, 1).normal_(mean=0.0, std=0.02).add_(val)
         # gamma
