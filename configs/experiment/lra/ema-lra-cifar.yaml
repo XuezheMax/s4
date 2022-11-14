@@ -30,7 +30,7 @@ loader:
   batch_size: 50
 
 optimizer:
-  lr: 0.01
+  lr: 0.005
   weight_decay: 0.05
 
 trainer:
@@ -38,6 +38,7 @@ trainer:
 
 scheduler:
   num_training_steps: 200000
+  num_warmup_steps: 9000
 
 train:
   seed: 2222
